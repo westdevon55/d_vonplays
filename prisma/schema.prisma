@@ -1,7 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Church Management System — full data model
+// Multi-tenant SaaS: every tenant-owned table carries `organizationId`
+// and is protected at the DB layer by Row-Level Security (see RLS migration).
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +9,769 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ============================================================================
+// Tenancy & Auth
+// ============================================================================
+
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  timezone      String   @default("UTC")
+  currency      String   @default("USD")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  memberships   Membership[]
+  people        Person[]
+  families      Family[]
+  peopleCategories PeopleCategory[]
+  customFields  CustomField[]
+  groupCategories GroupCategory[]
+  groups        Group[]
+  serviceTypes  ServiceType[]
+  services      Service[]
+  songs         Song[]
+  positions     Position[]
+  funds         Fund[]
+  donations     Donation[]
+  pledges       Pledge[]
+  recurringGifts RecurringGift[]
+  givingBatches GivingBatch[]
+  events        Event[]
+  checkinSessions CheckinSession[]
+  messageTemplates MessageTemplate[]
+  campaigns     Campaign[]
+  forms         Form[]
+  auditLogs     AuditLog[]
+  invitations   Invitation[]
+  subscription  Subscription?
+}
+
+model Subscription {
+  id              String   @id @default(cuid())
+  organizationId  String   @unique
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan            String   @default("trial")
+  status          String   @default("active")
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  trialEndsAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// User identity is global; access to an organization is granted via Membership.
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  name            String?
+  totpSecret      String?
+  totpEnabled     Boolean  @default(false)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  failedLoginCount Int     @default(0)
+  lockedUntil     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  memberships     Membership[]
+  sessions        Session[]
+  auditLogs       AuditLog[]
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  currentOrgId String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  STAFF
+  GROUP_LEADER
+  VOLUNTEER
+  MEMBER
+}
+
+model Membership {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role            Role     @default(MEMBER)
+  personId        String?  @unique
+  person          Person?  @relation(fields: [personId], references: [id])
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Invitation {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email           String
+  role            Role     @default(MEMBER)
+  token           String   @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUserId     String?
+  actor           User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  action          String
+  entityType      String
+  entityId        String?
+  metadata        Json?
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+}
+
+// ============================================================================
+// People & Families
+// ============================================================================
+
+model PeopleCategory {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  color           String   @default("#6b7280")
+  createdAt       DateTime @default(now())
+
+  people          Person[]
+
+  @@unique([organizationId, name])
+}
+
+model Family {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  addressLine1    String?
+  addressLine2    String?
+  city            String?
+  state           String?
+  postalCode      String?
+  country         String?
+  homePhone       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members         Person[]
+
+  @@index([organizationId])
+}
+
+enum PersonStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum FamilyRelation {
+  HEAD
+  SPOUSE
+  CHILD
+  OTHER
+}
+
+model Person {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  firstName       String
+  lastName        String
+  preferredName   String?
+  email           String?
+  mobilePhone     String?
+  dateOfBirth     DateTime?
+  gender          String?
+  status          PersonStatus @default(ACTIVE)
+  notes           String?
+  photoUrl        String?
+
+  familyId        String?
+  family          Family?  @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  familyRelation  FamilyRelation?
+
+  categoryId      String?
+  category        PeopleCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  customValues    CustomFieldValue[]
+  groupMembers    GroupMember[]
+  schedules       Schedule[]
+  availabilities  Availability[]
+  donations       Donation[]
+  pledges         Pledge[]
+  recurringGifts  RecurringGift[]
+  eventRegistrations EventRegistration[]
+  checkinRecords  CheckinRecord[]
+  membership      Membership?
+  formSubmissions FormSubmission[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, lastName, firstName])
+  @@index([organizationId, email])
+}
+
+enum CustomFieldKind {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+}
+
+model CustomField {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  kind            CustomFieldKind @default(TEXT)
+  options         String[] @default([])
+  createdAt       DateTime @default(now())
+
+  values          CustomFieldValue[]
+
+  @@unique([organizationId, name])
+}
+
+model CustomFieldValue {
+  id              String   @id @default(cuid())
+  customFieldId   String
+  customField     CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+  personId        String
+  person          Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  value           String
+
+  @@unique([customFieldId, personId])
+  @@index([personId])
+}
+
+// ============================================================================
+// Groups
+// ============================================================================
+
+model GroupCategory {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  color           String   @default("#6b7280")
+
+  groups          Group[]
+
+  @@unique([organizationId, name])
+}
+
+model Group {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  meetingDay      String?
+  meetingTime     String?
+  location        String?
+  categoryId      String?
+  category        GroupCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members         GroupMember[]
+  attendances     GroupAttendance[]
+
+  @@index([organizationId])
+}
+
+enum GroupRole {
+  LEADER
+  CO_LEADER
+  MEMBER
+}
+
+model GroupMember {
+  id              String   @id @default(cuid())
+  groupId         String
+  group           Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  personId        String
+  person          Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  role            GroupRole @default(MEMBER)
+  joinedAt        DateTime @default(now())
+
+  attendanceRecords AttendanceRecord[]
+
+  @@unique([groupId, personId])
+  @@index([personId])
+}
+
+model GroupAttendance {
+  id              String   @id @default(cuid())
+  groupId         String
+  group           Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  meetingDate     DateTime
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  records         AttendanceRecord[]
+
+  @@unique([groupId, meetingDate])
+}
+
+model AttendanceRecord {
+  id              String   @id @default(cuid())
+  attendanceId    String
+  attendance      GroupAttendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  memberId        String
+  member          GroupMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  present         Boolean  @default(true)
+
+  @@unique([attendanceId, memberId])
+}
+
+// ============================================================================
+// Services & Worship
+// ============================================================================
+
+model ServiceType {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  color           String   @default("#3b82f6")
+
+  services        Service[]
+  positions       Position[]
+
+  @@unique([organizationId, name])
+}
+
+model Service {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  serviceTypeId   String
+  serviceType     ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  title           String
+  serviceDate     DateTime
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  runSheetItems   RunSheetItem[]
+  schedules       Schedule[]
+
+  @@index([organizationId, serviceDate])
+}
+
+enum RunSheetItemKind {
+  HEADING
+  ITEM
+  SONG
+}
+
+model RunSheetItem {
+  id              String   @id @default(cuid())
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  kind            RunSheetItemKind @default(ITEM)
+  title           String
+  durationMinutes Int?
+  notes           String?
+  songId          String?
+  song            Song?    @relation(fields: [songId], references: [id], onDelete: SetNull)
+  position        Int
+
+  @@index([serviceId, position])
+}
+
+model Song {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title           String
+  author          String?
+  ccliNumber      String?
+  defaultKey      String?
+  bpm             Int?
+  lyrics          String?
+  chords          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  runSheetItems   RunSheetItem[]
+
+  @@index([organizationId, title])
+}
+
+model Position {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  serviceTypeId   String?
+  serviceType     ServiceType? @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
+  name            String
+
+  schedules       Schedule[]
+
+  @@unique([organizationId, name])
+}
+
+enum ScheduleStatus {
+  UNCONFIRMED
+  ACCEPTED
+  DECLINED
+}
+
+model Schedule {
+  id              String   @id @default(cuid())
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  positionId      String
+  position        Position @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  personId        String?
+  person          Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  status          ScheduleStatus @default(UNCONFIRMED)
+  notes           String?
+
+  @@index([serviceId])
+  @@index([personId])
+}
+
+model Availability {
+  id              String   @id @default(cuid())
+  personId        String
+  person          Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  startDate       DateTime
+  endDate         DateTime
+  available       Boolean  @default(false)
+  notes           String?
+
+  @@index([personId, startDate])
+}
+
+// ============================================================================
+// Giving
+// ============================================================================
+
+model Fund {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  donations       Donation[]
+  pledges         Pledge[]
+  recurringGifts  RecurringGift[]
+
+  @@unique([organizationId, name])
+}
+
+enum DonationMethod {
+  CASH
+  CHECK
+  CARD
+  ACH
+  OTHER
+}
+
+enum DonationStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+model GivingBatch {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  batchDate       DateTime
+  closedAt        DateTime?
+  createdAt       DateTime @default(now())
+
+  donations       Donation[]
+}
+
+model Donation {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  personId        String?
+  person          Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  fundId          String
+  fund            Fund     @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  amountCents     Int
+  currency        String   @default("USD")
+  method          DonationMethod @default(CASH)
+  status          DonationStatus @default(COMPLETED)
+  donatedAt       DateTime @default(now())
+  reference       String?
+  stripePaymentIntentId String? @unique
+  stripeChargeId  String?
+  batchId         String?
+  batch           GivingBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, donatedAt])
+  @@index([personId])
+}
+
+model Pledge {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  personId        String
+  person          Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  fundId          String
+  fund            Fund     @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  amountCents     Int
+  startDate       DateTime
+  endDate         DateTime
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+enum RecurringInterval {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  YEARLY
+}
+
+model RecurringGift {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  personId        String
+  person          Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  fundId          String
+  fund            Fund     @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  amountCents     Int
+  interval        RecurringInterval @default(MONTHLY)
+  active          Boolean  @default(true)
+  stripeSubscriptionId String? @unique
+  startedAt       DateTime @default(now())
+  cancelledAt     DateTime?
+}
+
+// ============================================================================
+// Events & Check-in
+// ============================================================================
+
+model Event {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  location        String?
+  startAt         DateTime
+  endAt           DateTime
+  capacity        Int?
+  registrationOpen Boolean @default(true)
+  isPublic        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  registrations   EventRegistration[]
+  checkinSessions CheckinSession[]
+
+  @@index([organizationId, startAt])
+}
+
+model EventRegistration {
+  id              String   @id @default(cuid())
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  personId        String?
+  person          Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  guestName       String?
+  guestEmail      String?
+  attendees       Int      @default(1)
+  status          String   @default("registered")
+  createdAt       DateTime @default(now())
+
+  @@index([eventId])
+}
+
+model CheckinSession {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventId         String?
+  event           Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  name            String
+  startAt         DateTime
+  endAt           DateTime?
+  createdAt       DateTime @default(now())
+
+  records         CheckinRecord[]
+}
+
+model CheckinRecord {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         CheckinSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  personId        String
+  person          Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  guardianCode    String
+  guardianName    String?
+  checkedInAt     DateTime @default(now())
+  checkedOutAt    DateTime?
+  checkedOutBy    String?
+
+  @@index([sessionId])
+  @@index([personId])
+}
+
+// ============================================================================
+// Communication
+// ============================================================================
+
+enum MessageChannel {
+  EMAIL
+  SMS
+}
+
+model MessageTemplate {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  channel         MessageChannel @default(EMAIL)
+  subject         String?
+  body            String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum CampaignStatus {
+  DRAFT
+  SENDING
+  SENT
+  FAILED
+}
+
+model Campaign {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  channel         MessageChannel @default(EMAIL)
+  subject         String?
+  body            String
+  status          CampaignStatus @default(DRAFT)
+  recipientFilter Json?
+  sentAt          DateTime?
+  sentCount       Int      @default(0)
+  failedCount     Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  messages        Message[]
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  toAddress       String
+  status          String   @default("queued")
+  errorMessage    String?
+  sentAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+// ============================================================================
+// Forms
+// ============================================================================
+
+enum FormFieldKind {
+  TEXT
+  TEXTAREA
+  EMAIL
+  PHONE
+  NUMBER
+  DATE
+  CHECKBOX
+  SELECT
+}
+
+model Form {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title           String
+  slug            String
+  description     String?
+  isPublished     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  fields          FormField[]
+  submissions     FormSubmission[]
+
+  @@unique([organizationId, slug])
+}
+
+model FormField {
+  id              String   @id @default(cuid())
+  formId          String
+  form            Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  label           String
+  kind            FormFieldKind @default(TEXT)
+  required        Boolean  @default(false)
+  options         String[] @default([])
+  position        Int
+
+  @@index([formId, position])
+}
+
+model FormSubmission {
+  id              String   @id @default(cuid())
+  formId          String
+  form            Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  personId        String?
+  person          Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  data            Json
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+
+  @@index([formId, createdAt])
 }
