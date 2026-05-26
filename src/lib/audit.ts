@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { db } from "./db";
+import { withTenant } from "./tenant";
 
 export type AuditAction =
   | "login.success"
@@ -29,19 +29,27 @@ export async function audit(params: {
   let ip: string | null = null;
   try {
     const h = await headers();
-    ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? null;
+    ip =
+      h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      h.get("x-real-ip") ??
+      null;
   } catch {
     // outside a request context (e.g., background job)
   }
-  await db.auditLog.create({
-    data: {
-      organizationId: params.organizationId,
-      actorUserId: params.actorUserId ?? null,
-      action: params.action,
-      entityType: params.entityType,
-      entityId: params.entityId ?? null,
-      metadata: params.metadata ? JSON.parse(JSON.stringify(params.metadata)) : null,
-      ipAddress: ip,
-    },
-  });
+  // Wrap in withTenant so the INSERT passes RLS for the right organization.
+  await withTenant(params.organizationId, (tx) =>
+    tx.auditLog.create({
+      data: {
+        organizationId: params.organizationId,
+        actorUserId: params.actorUserId ?? null,
+        action: params.action,
+        entityType: params.entityType,
+        entityId: params.entityId ?? null,
+        metadata: params.metadata
+          ? JSON.parse(JSON.stringify(params.metadata))
+          : null,
+        ipAddress: ip,
+      },
+    }),
+  );
 }

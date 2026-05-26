@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, dbAdmin } from "./db";
 import { getSession } from "./session";
 
 /**
@@ -44,7 +44,11 @@ export async function getTenantContext(): Promise<TenantContext | null> {
   if (!session) return null;
   if (!session.currentOrgId) return null;
 
-  const membership = await db.membership.findUnique({
+  // dbAdmin: we need to look up the membership BEFORE we know the org
+  // context (the whole point of this lookup is to derive the role for the
+  // current org). The query is constrained by the user+org composite key,
+  // so it returns at most a single row.
+  const membership = await dbAdmin.membership.findUnique({
     where: {
       userId_organizationId: {
         userId: session.userId,

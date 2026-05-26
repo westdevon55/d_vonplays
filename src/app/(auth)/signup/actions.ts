@@ -1,7 +1,7 @@
 "use server";
 import { z } from "zod";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import { dbAdmin } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { slugify } from "@/lib/utils";
@@ -28,7 +28,7 @@ export async function signupAction(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const existing = await db.user.findUnique({
+  const existing = await dbAdmin.user.findUnique({
     where: { email: parsed.data.email },
   });
   if (existing) {
@@ -37,15 +37,16 @@ export async function signupAction(
 
   const passwordHash = await hashPassword(parsed.data.password);
 
-  // Generate a unique slug.
+  // Org bootstrap: insert into RLS-protected tables before any tenant
+  // context exists → admin client.
   let slug = slugify(parsed.data.orgName) || "church";
   let suffix = 0;
-  while (await db.organization.findUnique({ where: { slug } })) {
+  while (await dbAdmin.organization.findUnique({ where: { slug } })) {
     suffix += 1;
     slug = `${slugify(parsed.data.orgName)}-${suffix}`;
   }
 
-  const result = await db.$transaction(async (tx) => {
+  const result = await dbAdmin.$transaction(async (tx) => {
     const org = await tx.organization.create({
       data: {
         name: parsed.data.orgName,

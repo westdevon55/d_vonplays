@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
-import { db } from "@/lib/db";
+import { dbAdmin } from "@/lib/db";
 import { SidebarNav } from "./_components/SidebarNav";
 import { OrgSwitcher } from "./_components/OrgSwitcher";
 import { LogoutButton } from "./_components/LogoutButton";
@@ -15,7 +15,7 @@ export default async function AppLayout({
   if (!session) redirect("/login");
   if (!session.currentOrgId) redirect("/signup");
 
-  const memberships = await db.membership.findMany({
+  const memberships = await dbAdmin.membership.findMany({
     where: { userId: session.userId },
     include: { organization: true },
   });

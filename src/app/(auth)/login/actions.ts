@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import { db, dbAdmin } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { rateLimit } from "@/lib/rateLimit";
@@ -35,7 +35,9 @@ export async function loginAction(
     return { error: "Too many login attempts. Try again later." };
   }
 
-  const user = await db.user.findUnique({
+  // Auth bootstrap reads Membership across orgs (no tenant context yet)
+  // → dbAdmin. User and Session tables are not tenant-scoped.
+  const user = await dbAdmin.user.findUnique({
     where: { email: parsed.data.email },
     include: { memberships: { take: 1, orderBy: { createdAt: "asc" } } },
   });

@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { randomBytes } from "node:crypto";
-import { db } from "./db";
+import { db, dbAdmin } from "./db";
 
 const COOKIE_NAME = "church_cms_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
@@ -84,8 +84,9 @@ export async function switchOrg(organizationId: string): Promise<void> {
   const session = await db.session.findUnique({ where: { token } });
   if (!session) throw new Error("UNAUTHENTICATED");
 
-  // verify the user actually belongs to this org
-  const membership = await db.membership.findUnique({
+  // verify the user actually belongs to this org (cross-tenant lookup
+  // before tenant context is established → admin client).
+  const membership = await dbAdmin.membership.findUnique({
     where: {
       userId_organizationId: {
         userId: session.userId,

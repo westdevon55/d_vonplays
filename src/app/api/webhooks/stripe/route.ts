@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { db } from "@/lib/db";
+import { withTenant } from "@/lib/tenant";
+import { dbAdmin } from "@/lib/db";
 import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
@@ -53,24 +54,29 @@ export async function POST(req: NextRequest) {
 
     // Idempotency: don't double-record if the same payment_intent arrives twice.
     const pi = session.payment_intent ?? session.id;
-    const existing = await db.donation.findUnique({
+    const existing = await dbAdmin.donation.findUnique({
       where: { stripePaymentIntentId: pi },
     });
     if (existing) return NextResponse.json({ received: true });
 
-    const donation = await db.donation.create({
-      data: {
-        organizationId,
-        personId,
-        fundId,
-        amountCents: session.amount_total,
-        currency: (session.currency || "usd").toUpperCase(),
-        method: "CARD",
-        status: "COMPLETED",
-        donatedAt: new Date(),
-        stripePaymentIntentId: pi,
-      },
-    });
+    // Use withTenant so the INSERT passes the RLS policy for the right org.
+    // organizationId comes from signed Stripe metadata that we set when
+    // creating the Checkout session.
+    const donation = await withTenant(organizationId, (tx) =>
+      tx.donation.create({
+        data: {
+          organizationId,
+          personId,
+          fundId,
+          amountCents: session.amount_total!,
+          currency: (session.currency || "usd").toUpperCase(),
+          method: "CARD",
+          status: "COMPLETED",
+          donatedAt: new Date(),
+          stripePaymentIntentId: pi,
+        },
+      }),
+    );
     await audit({
       organizationId,
       action: "donation.stripe_completed",
