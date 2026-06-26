@@ -1,0 +1,406 @@
+<!--
+  Euphoria Print — Quote Calculator (GoHighLevel embed)
+  ----------------------------------------------------------------------------
+  HOW TO USE IN GOHIGHLEVEL
+  1. Edit a Funnel/Website page → add a "Custom Code" (or "Custom HTML") element.
+  2. Paste this ENTIRE file into it. Save & publish.
+  3. (Optional) To capture the quote as a lead, see the CONFIG block below.
+
+  NOTE ON PRICING SECRECY
+  GoHighLevel pages are 100% client-side, so the operator levers (job
+  multiplier and flat fee) live in this file and are therefore visible to
+  anyone who views page source. The customer never *sees* them in the UI, but
+  they are not cryptographically hidden. If you need them truly server-side,
+  host the Next.js version instead and have this widget call its API (ask me
+  and I'll wire that variant).
+
+  Everything is scoped under #eqp and prefixed `eqp-` so it won't clash with
+  your GHL theme.
+-->
+
+<div id="eqp">
+  <div class="eqp-wrap">
+    <div class="eqp-config">
+      <!-- ============ CONFIG (panel) ============ -->
+    </div>
+
+    <div class="eqp-grid">
+      <!-- Left: configuration -->
+      <div class="eqp-left">
+        <div class="eqp-field">
+          <p class="eqp-label">Product</p>
+          <div class="eqp-options" data-eqp="products"></div>
+        </div>
+
+        <div class="eqp-field">
+          <p class="eqp-label">Quantity</p>
+          <div class="eqp-presets" data-eqp="qty-presets"></div>
+          <input class="eqp-input eqp-qty" type="number" min="1" step="1" value="500" aria-label="Quantity" />
+          <p class="eqp-warn" data-eqp="qty-warn" hidden>Enter a whole number greater than zero.</p>
+        </div>
+
+        <div class="eqp-field">
+          <p class="eqp-label">Color</p>
+          <div class="eqp-options eqp-cols-3" data-eqp="color"></div>
+        </div>
+
+        <div class="eqp-field">
+          <p class="eqp-label">Sides</p>
+          <div class="eqp-options eqp-cols-2" data-eqp="sides"></div>
+        </div>
+      </div>
+
+      <!-- Right: price summary -->
+      <div class="eqp-right">
+        <div class="eqp-card">
+          <div class="eqp-price-head">
+            <p class="eqp-price-cap">Your price</p>
+            <div class="eqp-price" data-eqp="total">$—</div>
+            <p class="eqp-sub" data-eqp="perpiece"></p>
+            <span class="eqp-badge" data-eqp="dream" hidden>Dream Makers −10% applied</span>
+          </div>
+          <div class="eqp-card-body">
+            <dl class="eqp-rows">
+              <div><dt>Product</dt><dd data-eqp="r-product">—</dd></div>
+              <div><dt>Quantity</dt><dd data-eqp="r-qty">—</dd></div>
+              <div><dt>Color</dt><dd data-eqp="r-color">—</dd></div>
+              <div><dt>Sides</dt><dd data-eqp="r-sides">—</dd></div>
+            </dl>
+
+            <label class="eqp-label" for="eqp-promo">Promo code (optional)</label>
+            <input id="eqp-promo" class="eqp-input" placeholder="e.g. DREAMMAKERS" />
+
+            <button class="eqp-btn eqp-btn-primary" data-eqp="request" type="button">Get this quote</button>
+            <p class="eqp-fineprint">Final total shown — no hidden fees.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* ---- Scoped styles (all under #eqp) ---- */
+  #eqp { --eqp-ink:#1c1033; --eqp-soft:#4b4263; --eqp-muted:#6b6385; --eqp-line:#e9e4f2;
+         --eqp-brand:#7c3aed; --eqp-brand-dark:#6d28d9; --eqp-brand-soft:#f3eeff;
+         --eqp-accent:#ec4899;
+         --eqp-grad:linear-gradient(120deg,#7c3aed 0%,#a855f7 45%,#ec4899 100%);
+         color:var(--eqp-ink);
+         font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+         -webkit-font-smoothing:antialiased; }
+  #eqp *,#eqp *::before,#eqp *::after { box-sizing:border-box; }
+  #eqp [hidden] { display:none !important; } /* keep hidden working under custom display rules */
+  #eqp .eqp-wrap { max-width:960px; margin:0 auto; }
+  #eqp .eqp-grid { display:grid; gap:24px; grid-template-columns:1fr; }
+  @media (min-width:860px){ #eqp .eqp-grid { grid-template-columns:1fr 340px; } }
+  #eqp .eqp-left { display:flex; flex-direction:column; gap:22px; }
+  #eqp .eqp-field { margin:0; }
+  #eqp .eqp-label { display:block; font-size:.78rem; font-weight:700; letter-spacing:.01em;
+                    color:var(--eqp-soft); margin:0 0 8px; }
+  #eqp .eqp-options { display:grid; gap:8px; grid-template-columns:1fr; }
+  @media (min-width:560px){ #eqp .eqp-options { grid-template-columns:1fr 1fr; } }
+  @media (min-width:560px){ #eqp .eqp-cols-3 { grid-template-columns:1fr 1fr 1fr; } }
+  #eqp .eqp-option { display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+                     border:1px solid var(--eqp-line); background:#fff; border-radius:12px;
+                     padding:11px 14px; font-size:.9rem; font-weight:600; color:var(--eqp-soft);
+                     cursor:pointer; text-align:left; transition:border-color .12s,background .12s,color .12s; }
+  #eqp .eqp-option:hover { border-color:var(--eqp-brand); }
+  #eqp .eqp-option[aria-pressed="true"] { border-color:var(--eqp-brand); background:var(--eqp-brand-soft);
+                     color:var(--eqp-brand-dark); }
+  #eqp .eqp-option small { font-weight:500; color:var(--eqp-muted); }
+  #eqp .eqp-presets { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  #eqp .eqp-preset { border:1px solid var(--eqp-line); background:#fff; border-radius:12px;
+                     padding:9px 14px; font-size:.9rem; font-weight:600; color:var(--eqp-soft); cursor:pointer; }
+  #eqp .eqp-preset[aria-pressed="true"] { border-color:var(--eqp-brand); background:var(--eqp-brand-soft);
+                     color:var(--eqp-brand-dark); }
+  #eqp .eqp-input { display:block; width:100%; max-width:220px; border:1px solid var(--eqp-line);
+                    background:#fff; border-radius:12px; padding:10px 13px; font-size:.95rem; color:var(--eqp-ink); }
+  #eqp .eqp-card .eqp-input { max-width:none; margin-bottom:12px; }
+  #eqp .eqp-input:focus { outline:none; border-color:var(--eqp-brand);
+                    box-shadow:0 0 0 3px rgba(124,58,237,.15); }
+  #eqp .eqp-warn { color:var(--eqp-accent); font-size:.85rem; margin:8px 0 0; }
+  #eqp .eqp-right { }
+  @media (min-width:860px){ #eqp .eqp-right { position:sticky; top:16px; align-self:start; } }
+  #eqp .eqp-card { background:#fff; border:1px solid var(--eqp-line); border-radius:20px; overflow:hidden;
+                   box-shadow:0 1px 2px rgba(28,16,51,.04); }
+  #eqp .eqp-price-head { background:var(--eqp-grad); color:#fff; padding:20px 24px; }
+  #eqp .eqp-price-cap { margin:0; font-size:.85rem; opacity:.9; font-weight:500; }
+  #eqp .eqp-price { font-size:2.4rem; font-weight:800; line-height:1.1; margin-top:4px;
+                    font-variant-numeric:tabular-nums; }
+  #eqp .eqp-sub { margin:4px 0 0; font-size:.85rem; opacity:.92; }
+  #eqp .eqp-badge { display:inline-block; margin-top:8px; background:rgba(255,255,255,.2);
+                    border-radius:999px; padding:2px 10px; font-size:.72rem; font-weight:700; }
+  #eqp .eqp-card-body { padding:22px 24px; }
+  #eqp .eqp-rows { margin:0 0 16px; display:grid; gap:6px; }
+  #eqp .eqp-rows > div { display:flex; justify-content:space-between; gap:16px; font-size:.9rem; }
+  #eqp .eqp-rows dt { color:var(--eqp-muted); margin:0; }
+  #eqp .eqp-rows dd { margin:0; font-weight:700; color:var(--eqp-ink); }
+  #eqp .eqp-btn { display:inline-flex; width:100%; align-items:center; justify-content:center; gap:8px;
+                  border:none; border-radius:12px; padding:12px 18px; font-size:.95rem; font-weight:700;
+                  cursor:pointer; transition:transform .12s,box-shadow .12s,opacity .12s; }
+  #eqp .eqp-btn:disabled { opacity:.55; cursor:not-allowed; }
+  #eqp .eqp-btn-primary { background:var(--eqp-grad); color:#fff;
+                  box-shadow:0 8px 24px -8px rgba(124,58,237,.6); }
+  #eqp .eqp-btn-primary:not(:disabled):hover { transform:translateY(-1px); }
+  #eqp .eqp-fineprint { text-align:center; font-size:.75rem; color:var(--eqp-muted); margin:10px 0 0; }
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ====================== CONFIG ====================== *
+   * Wire the "Get this quote" button to your lead flow.
+   *
+   *   requestMode: "summary" | "form" | "redirect"
+   *     - "summary" : shows the quote in an alert (default; safe to demo).
+   *     - "form"    : fills fields in a GHL form on the page (see fieldMap),
+   *                   fires input events so GHL captures them, then submits
+   *                   if submitForm is true.
+   *     - "redirect": sends the customer to redirectUrl with the quote in
+   *                   query-string params.
+   */
+  var CONFIG = {
+    requestMode: "summary",
+    promoCode: "DREAMMAKERS",         // entering this gives -10%
+    currency: "USD",
+
+    // For requestMode:"form"
+    formSelector: "form",
+    submitForm: false,
+    // Map quote fields -> the `name` attribute of inputs in your GHL form.
+    fieldMap: {
+      product:  "product",
+      quantity: "quantity",
+      color:    "color",
+      sides:    "sides",
+      total:    "quoted_total"
+    },
+
+    // For requestMode:"redirect"
+    redirectUrl: "https://euphoriaprint.com/checkout"
+  };
+
+  /* ============ PRICING (mirrors the Next.js engine) ============ */
+  var CLICK_RATES = {
+    color: { 1: 0.0364, 2: 0.0728 },
+    bw:    { 1: 0.0042, 2: 0.0084 },
+    mixed: { 1: 0.0406, 2: 0.0406 }
+  };
+
+  // costPerSheet, jobMultiplier (mult) and flatFee (fee) are operator margin
+  // levers — shown here only because GHL has no server. Customers never see
+  // them in the UI.
+  var CATALOG = [
+    { id:"bc",   label:"Business cards",            size:"3.5×2",  parent:"12×18", nUp:24, cost:0.23,  mult:4, fee:45, sides:[1,2], defSides:2 },
+    { id:"f57",  label:"5×7 flyers",                size:"5×7",    parent:"11×17", nUp:4,  cost:0.15,  mult:4, fee:45, sides:[1,2], defSides:2 },
+    { id:"f85",  label:"8.5×11 flyers",             size:"8.5×11", parent:"12×18", nUp:2,  cost:0.315, mult:3, fee:25, sides:[1,2], defSides:2 },
+    { id:"tri1", label:"Tri-fold pamphlet (12×18)", size:"tri-fold", parent:"12×18", nUp:2, cost:0.315, mult:5, fee:75, sides:[1,2], defSides:2 },
+    { id:"tri2", label:"Tri-fold pamphlet (17×18)", size:"tri-fold", parent:"17×18", nUp:2, cost:0.108, mult:5, fee:75, sides:[1,2], defSides:2 }
+  ];
+
+  var COLOR_LABELS = { color:"Full color", bw:"Black & white", mixed:"Mixed (color + B&W)" };
+  var SIDES_LABELS = { 1:{t:"Single-sided", s:"Front only"}, 2:{t:"Double-sided", s:"Front & back"} };
+  var QTY_PRESETS = [100, 250, 500, 1000, 2500];
+
+  function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+  function quote(p){
+    var qty = p.quantity, rate = CLICK_RATES[p.colorMode][p.sides];
+    if (!(qty > 0) || !(p.nUp > 0) || rate === undefined) return null;
+    var sheets = Math.ceil(qty / p.nUp);
+    var paper  = sheets * p.cost;
+    var clicks = sheets * rate;
+    var subtotal = paper + clicks;
+    var total = subtotal * p.mult + p.fee;
+    if (p.dream) total *= 0.9;
+    return { sheets: sheets, total: round2(total) };
+  }
+
+  /* ====================== STATE / DOM ====================== */
+  var root = document.getElementById("eqp");
+  if (!root) return;
+  var $ = function (sel) { return root.querySelector(sel); };
+  var byKey = function (k) { return root.querySelector('[data-eqp="' + k + '"]'); };
+
+  var state = {
+    productId: CATALOG[0].id,
+    quantity: 500,
+    colorMode: "color",
+    sides: CATALOG[0].defSides
+  };
+
+  function product(){ return CATALOG.filter(function(p){ return p.id === state.productId; })[0]; }
+
+  function pill(label, sub, pressed){
+    return '<button type="button" class="eqp-option" aria-pressed="' + (pressed ? "true":"false") + '">' +
+           label + (sub ? '<small>' + sub + '</small>' : '') + '</button>';
+  }
+
+  function renderProducts(){
+    byKey("products").innerHTML = CATALOG.map(function(p){
+      var sub = (p.size && p.size !== "—" ? p.size + " · " : "") + p.nUp + "-up on " + p.parent;
+      return pill(p.label, sub, p.id === state.productId);
+    }).join("");
+    Array.prototype.forEach.call(byKey("products").children, function(btn, i){
+      btn.addEventListener("click", function(){ selectProduct(CATALOG[i].id); });
+    });
+  }
+
+  function renderColor(){
+    var p = product();
+    var modes = ["color","bw","mixed"];
+    byKey("color").innerHTML = modes.map(function(m){
+      return pill(COLOR_LABELS[m], "", m === state.colorMode);
+    }).join("");
+    Array.prototype.forEach.call(byKey("color").children, function(btn, i){
+      btn.addEventListener("click", function(){ state.colorMode = modes[i]; renderColor(); recompute(); });
+    });
+  }
+
+  function renderSides(){
+    var p = product();
+    byKey("sides").innerHTML = p.sides.map(function(s){
+      return pill(SIDES_LABELS[s].t, SIDES_LABELS[s].s, s === state.sides);
+    }).join("");
+    Array.prototype.forEach.call(byKey("sides").children, function(btn, i){
+      btn.addEventListener("click", function(){ state.sides = p.sides[i]; renderSides(); recompute(); });
+    });
+  }
+
+  function renderQtyPresets(){
+    byKey("qty-presets").innerHTML = QTY_PRESETS.map(function(q){
+      return '<button type="button" class="eqp-preset" aria-pressed="' +
+             (Number(state.quantity) === q ? "true":"false") + '">' + q.toLocaleString() + '</button>';
+    }).join("");
+    Array.prototype.forEach.call(byKey("qty-presets").children, function(btn, i){
+      btn.addEventListener("click", function(){
+        state.quantity = QTY_PRESETS[i];
+        $(".eqp-qty").value = state.quantity;
+        renderQtyPresets(); recompute();
+      });
+    });
+  }
+
+  function selectProduct(id){
+    state.productId = id;
+    var p = product();
+    if (p.sides.indexOf(state.sides) === -1) state.sides = p.defSides;
+    renderProducts(); renderColor(); renderSides(); recompute();
+  }
+
+  function fmtMoney(n){
+    return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+
+  var lastQuote = null;
+
+  function recompute(){
+    var p = product();
+    var qty = parseInt($(".eqp-qty").value, 10);
+    var valid = Number.isFinite(qty) && qty > 0;
+    byKey("qty-warn").hidden = valid;
+
+    var promo = ($("#eqp-promo").value || "").trim().toUpperCase();
+    var dream = !!promo && promo === CONFIG.promoCode.toUpperCase();
+
+    // summary rows
+    byKey("r-product").textContent = p.label;
+    byKey("r-qty").textContent     = valid ? qty.toLocaleString() : "—";
+    byKey("r-color").textContent   = COLOR_LABELS[state.colorMode];
+    byKey("r-sides").textContent   = SIDES_LABELS[state.sides].t;
+    byKey("dream").hidden = !dream;
+
+    if (!valid){
+      lastQuote = null;
+      byKey("total").textContent = "$—";
+      byKey("perpiece").textContent = "";
+      byKey("request").disabled = true;
+      return;
+    }
+
+    var r = quote({
+      quantity: qty, nUp: p.nUp, cost: p.cost,
+      colorMode: state.colorMode, sides: state.sides,
+      mult: p.mult, fee: p.fee, dream: dream
+    });
+
+    if (!r){
+      lastQuote = null;
+      byKey("total").textContent = "$—";
+      byKey("perpiece").textContent = "";
+      byKey("request").disabled = true;
+      return;
+    }
+
+    var unit = round2(r.total / qty);
+    lastQuote = {
+      product: p.label, productId: p.id, quantity: qty,
+      color: COLOR_LABELS[state.colorMode], sides: SIDES_LABELS[state.sides].t,
+      total: r.total, perPiece: unit, currency: CONFIG.currency, dreamMakers: dream
+    };
+
+    byKey("total").textContent = fmtMoney(r.total);
+    byKey("perpiece").textContent = "$" + unit.toFixed(2) + " per piece · " + qty.toLocaleString() + " qty";
+    byKey("request").disabled = false;
+  }
+
+  /* ============ Lead capture on "Get this quote" ============ */
+  function setField(form, name, value){
+    if (!name) return;
+    var el = form.querySelector('[name="' + name + '"]');
+    if (!el) return;
+    el.value = value;
+    el.dispatchEvent(new Event("input",  { bubbles:true }));
+    el.dispatchEvent(new Event("change", { bubbles:true }));
+  }
+
+  function handleRequest(){
+    if (!lastQuote) return;
+    var q = lastQuote;
+
+    if (CONFIG.requestMode === "form"){
+      var form = document.querySelector(CONFIG.formSelector);
+      if (form){
+        var m = CONFIG.fieldMap;
+        setField(form, m.product,  q.product);
+        setField(form, m.quantity, q.quantity);
+        setField(form, m.color,    q.color);
+        setField(form, m.sides,    q.sides);
+        setField(form, m.total,    q.total.toFixed(2));
+        if (CONFIG.submitForm && typeof form.requestSubmit === "function") form.requestSubmit();
+        else form.scrollIntoView({ behavior:"smooth", block:"center" });
+        return;
+      }
+    }
+
+    if (CONFIG.requestMode === "redirect"){
+      var params = new URLSearchParams({
+        product: q.productId, quantity: q.quantity, color: state.colorMode,
+        sides: String(state.sides), total: q.total.toFixed(2)
+      });
+      window.location.href = CONFIG.redirectUrl + "?" + params.toString();
+      return;
+    }
+
+    // default: summary
+    alert(
+      "Your Euphoria Print quote\n\n" +
+      q.quantity.toLocaleString() + " × " + q.product + "\n" +
+      q.color + ", " + q.sides + "\n" +
+      (q.dreamMakers ? "Dream Makers -10% applied\n" : "") +
+      "\nTotal: " + fmtMoney(q.total) + " (" + fmtMoney(q.perPiece) + " each)"
+    );
+  }
+
+  /* ====================== INIT ====================== */
+  renderProducts(); renderQtyPresets(); renderColor(); renderSides();
+  $(".eqp-qty").addEventListener("input", recompute);
+  $("#eqp-promo").addEventListener("input", recompute);
+  byKey("request").addEventListener("click", handleRequest);
+  recompute();
+
+  // Expose for debugging / external wiring
+  window.EuphoriaQuote = { getQuote: function(){ return lastQuote; }, quote: quote, CATALOG: CATALOG };
+})();
+</script>
